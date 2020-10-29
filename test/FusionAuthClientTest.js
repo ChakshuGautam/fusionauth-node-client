@@ -28,10 +28,10 @@ let client;
 describe('#FusionAuthClient()', function() {
 
   beforeEach(async () => {
-    client = new FusionAuthClient('bf69486b-4733-4470-a592-f1bfce7af580', 'https://local.fusionauth.io');
+    const fusionauthUrl = process.env.FUSIONAUTH_URL || "https://local.fusionauth.io";
+    const fusionauthApiKey = process.env.FUSIONAUTH_API_KEY || "bf69486b-4733-4470-a592-f1bfce7af580";
+    client = new FusionAuthClient(fusionauthApiKey, fusionauthUrl);
     let response = await client.retrieveTenants();
-
-
 
     let desiredTenant = response.successResponse.tenants.find((tenant) => {
       return tenant.id === tenantId
@@ -52,6 +52,15 @@ describe('#FusionAuthClient()', function() {
 
     try {
       await client.deleteApplication('e5e2b0b3-c329-4b08-896c-d4f9f612b5c0');
+    } catch (ignore) {
+    }
+
+    // Cleanup the user (just in case a test partially failed)
+    try {
+      response = await client.retrieveUserByEmail("nodejs@fusionauth.io")
+      if (response.wasSuccessful()) {
+        await client.deleteUser(response.successResponse.user.id)
+      }
     } catch (ignore) {
     }
 
@@ -96,6 +105,33 @@ describe('#FusionAuthClient()', function() {
 
                    chai.assert.strictEqual(clientResponse.statusCode, 404);
                  });
+  });
+
+  it('Patch a User', () => {
+    return client.createUser(null, {
+                   'user': {
+                     'email': 'nodejs@fusionauth.io',
+                     'firstName': 'Jäne',
+                     'password': 'password'
+                   },
+                   'skipVerification': true
+                 })
+                 .then((clientResponse) => {
+                   chai.assert.strictEqual(clientResponse.statusCode, 200);
+                   chai.assert.isNotNull(clientResponse.successResponse);
+                   chai.expect(clientResponse.successResponse).to.have.property('user');
+                   chai.expect(clientResponse.successResponse.user).to.have.property('id');
+
+                   return client.patchUser(clientResponse.successResponse.user.id, {user: {
+                       firstName: "Jan"
+                     }}).then((clientResponse) => {
+                       chai.assert.strictEqual(clientResponse.statusCode, 200);
+                       chai.assert.isNotNull(clientResponse.successResponse);
+                       chai.expect(clientResponse.successResponse).to.have.property('user');
+                       chai.expect(clientResponse.successResponse.user).to.have.property('id');
+                       chai.expect(clientResponse.successResponse.user.firstName).to.equal("Jan");
+                   });
+                  });
   });
 
 });
